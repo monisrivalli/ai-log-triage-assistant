@@ -1,15 +1,17 @@
 import streamlit as st
-from openai import OpenAI
+import google.generativeai as genai
 
 st.title("AI Serial Log Analyzer")
 
-client = OpenAI(
-    api_key=st.secrets["OPENAI_API_KEY"]
+genai.configure(
+    api_key=st.secrets["GEMINI_API_KEY"]
 )
+
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 uploaded_file = st.file_uploader(
     "Upload Log",
-    type=["txt","log"]
+    type=["txt", "log"]
 )
 
 if uploaded_file:
@@ -20,28 +22,20 @@ if uploaded_file:
 
     if st.button("Analyze"):
 
-        response = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role":"user",
-                    "content":f"""
-                    Analyze this serial log.
+        response = model.generate_content(
+            f"""
+            Analyze this serial log.
 
-                    Identify:
-                    1. Errors
-                    2. Failure Type
-                    3. Root Cause
-                    4. Debug Actions
+            Identify:
+            1. Errors
+            2. Failure Type
+            3. Root Cause
+            4. Debug Actions
 
-                    Log:
+            Log:
 
-                    {log_content}
-                    """
-                }
-            ]
+            {log_content}
+            """
         )
 
-        st.write(
-            response.choices[0].message.content
-        )
+        st.write(response.text)
