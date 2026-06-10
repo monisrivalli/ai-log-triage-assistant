@@ -1,12 +1,41 @@
 import streamlit as st
 import google.generativeai as genai
 
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+st.title("AI Serial Log Analyzer")
 
-st.title("Gemini Models")
+genai.configure(
+    api_key=st.secrets["GEMINI_API_KEY"]
+)
 
-try:
-    for m in genai.list_models():
-        st.write(m.name)
-except Exception as e:
-    st.exception(e)
+model = genai.GenerativeModel("models/gemini-2.5-flash")
+
+uploaded_file = st.file_uploader(
+    "Upload Log",
+    type=["txt", "log"]
+)
+
+if uploaded_file:
+
+    log_content = uploaded_file.read().decode("utf-8")
+
+    st.text(log_content)
+
+    if st.button("Analyze"):
+
+        response = model.generate_content(
+            f"""
+            Analyze this serial log.
+
+            Identify:
+            1. Errors
+            2. Failure Type
+            3. Root Cause
+            4. Debug Actions
+
+            Log:
+
+            {log_content}
+            """
+        )
+
+        st.write(response.text)
