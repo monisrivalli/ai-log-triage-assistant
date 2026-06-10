@@ -21,7 +21,7 @@ if uploaded_file:
     if st.button("Analyze"):
 
         response = client.chat.completions.create(
-            model="model="gpt-5",
+            model="gpt-5",
             messages=[
                 {
                     "role":"user",
