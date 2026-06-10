@@ -1,5 +1,15 @@
 import streamlit as st
 
-st.title("AI Log Analysis Assistant")
+st.title("AI Serial Log Analyzer")
 
-st.write("AI project")
+uploaded_file = st.file_uploader(
+    "Upload Serial Log",
+    type=["txt", "log"]
+)
+
+if uploaded_file:
+    log_content = uploaded_file.read().decode("utf-8")
+
+    st.subheader("Uploaded Log")
+
+    st.text(log_content[:2000])
