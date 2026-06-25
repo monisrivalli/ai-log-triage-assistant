@@ -3,9 +3,10 @@ import google.generativeai as genai
 from datetime import datetime
 import sqlite3
 
-# -----------------------------
-# Database Setup
-# -----------------------------
+# ==================================
+# DATABASE SETUP
+# ==================================
+
 conn = sqlite3.connect(
     "log_history.db",
     check_same_thread=False
@@ -18,20 +19,25 @@ CREATE TABLE IF NOT EXISTS history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT,
     filename TEXT,
+    category TEXT,
+    failure_type TEXT,
+    priority TEXT,
     result TEXT
 )
 """)
 
 conn.commit()
 
-# -----------------------------
-# App Title
-# -----------------------------
+# ==================================
+# APP TITLE
+# ==================================
+
 st.title("AI Serial Log Analyzer")
 
-# -----------------------------
-# Gemini Configuration
-# -----------------------------
+# ==================================
+# GEMINI CONFIGURATION
+# ==================================
+
 genai.configure(
     api_key=st.secrets["GEMINI_API_KEY"]
 )
@@ -40,9 +46,10 @@ model = genai.GenerativeModel(
     "models/gemini-2.5-flash"
 )
 
-# -----------------------------
-# Upload Log
-# -----------------------------
+# ==================================
+# FILE UPLOAD
+# ==================================
+
 uploaded_file = st.file_uploader(
     "Upload Log",
     type=["txt", "log"]
@@ -51,12 +58,17 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
 
     log_content = uploaded_file.read().decode(
-        "utf-8"
+        "utf-8",
+        errors="ignore"
     )
 
     st.subheader("Uploaded Log")
 
-    st.text(log_content)
+    st.text_area(
+        "Log Content",
+        log_content,
+        height=300
+    )
 
     if st.button("Analyze"):
 
@@ -68,10 +80,15 @@ Analyze the following log.
 
 Return the response EXACTLY in this format:
 
+Category: <PCIe | USB | Memory | BIOS | Firmware | Ethernet | Storage | Power | Thermal | Security>
+
 Failure Type: <value>
+
 Confidence: <value>
+
 Affected Component: <value>
-Priority: <value>
+
+Priority: <Critical | High | Medium | Low>
 
 Errors:
 - <error1>
@@ -93,9 +110,11 @@ Log:
 
         result = response.text
 
-        # -----------------------------
-        # Extract Summary Fields
-        # -----------------------------
+        # ==================================
+        # PARSE RESPONSE
+        # ==================================
+
+        category = "Unknown"
         failure_type = "Unknown"
         confidence = "N/A"
         component = "Unknown"
@@ -103,56 +122,53 @@ Log:
 
         for line in result.splitlines():
 
-            if line.startswith(
-                "Failure Type:"
-            ):
-                failure_type = (
-                    line.replace(
-                        "Failure Type:",
-                        ""
-                    ).strip()
-                )
+            line = line.strip()
 
-            elif line.startswith(
-                "Confidence:"
-            ):
-                confidence = (
-                    line.replace(
-                        "Confidence:",
-                        ""
-                    ).strip()
-                )
+            if line.startswith("Category:"):
+                category = line.replace(
+                    "Category:",
+                    ""
+                ).strip()
+
+            elif line.startswith("Failure Type:"):
+                failure_type = line.replace(
+                    "Failure Type:",
+                    ""
+                ).strip()
+
+            elif line.startswith("Confidence:"):
+                confidence = line.replace(
+                    "Confidence:",
+                    ""
+                ).strip()
 
             elif line.startswith(
                 "Affected Component:"
             ):
-                component = (
-                    line.replace(
-                        "Affected Component:",
-                        ""
-                    ).strip()
-                )
+                component = line.replace(
+                    "Affected Component:",
+                    ""
+                ).strip()
 
-            elif line.startswith(
-                "Priority:"
-            ):
-                priority = (
-                    line.replace(
-                        "Priority:",
-                        ""
-                    ).strip()
-                )
+            elif line.startswith("Priority:"):
+                priority = line.replace(
+                    "Priority:",
+                    ""
+                ).strip()
 
-        # -----------------------------
-        # Failure Summary Card
-        # -----------------------------
-        st.subheader(
-            "Failure Summary"
-        )
+        # ==================================
+        # FAILURE SUMMARY
+        # ==================================
+
+        st.subheader("Failure Summary")
 
         col1, col2 = st.columns(2)
 
         with col1:
+
+            st.info(
+                f"**Category:** {category}"
+            )
 
             st.info(
                 f"**Failure Type:** {failure_type}"
@@ -192,65 +208,115 @@ Log:
                     f"Priority: {priority}"
                 )
 
-        # -----------------------------
-        # Full Analysis
-        # -----------------------------
-        st.subheader(
-            "Analysis Result"
-        )
+        # ==================================
+        # FULL ANALYSIS
+        # ==================================
+
+        st.subheader("Analysis Result")
 
         st.write(result)
 
-        # -----------------------------
-        # Save To Database
-        # -----------------------------
+        # ==================================
+        # SAVE TO SQLITE
+        # ==================================
+
         cursor.execute(
             """
             INSERT INTO history
             (
                 timestamp,
                 filename,
+                category,
+                failure_type,
+                priority,
                 result
             )
-            VALUES (?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
                 ),
                 uploaded_file.name,
+                category,
+                failure_type,
+                priority,
                 result
             )
         )
 
         conn.commit()
 
-# -----------------------------
-# Sidebar History Search
-# -----------------------------
+# ==================================
+# SIDEBAR
+# ==================================
+
 st.sidebar.title(
     "Analysis History"
 )
 
+# Search Box
 search_term = st.sidebar.text_input(
-    "Search History"
+    "Search File Name"
 )
 
-if search_term:
+# Category Filter
+category_filter = st.sidebar.selectbox(
+    "Filter By Category",
+    [
+        "All",
+        "PCIe",
+        "USB",
+        "Memory",
+        "BIOS",
+        "Firmware",
+        "Ethernet",
+        "Storage",
+        "Power",
+        "Thermal",
+        "Security"
+    ]
+)
 
-    cursor.execute(
-        """
-        SELECT timestamp,
-               filename,
-               result
-        FROM history
-        WHERE filename LIKE ?
-        ORDER BY id DESC
-        """,
-        (
-            f"%{search_term}%",
+# ==================================
+# QUERY DATABASE
+# ==================================
+
+if category_filter == "All":
+
+    if search_term:
+
+        cursor.execute(
+            """
+            SELECT timestamp,
+                   filename,
+                   category,
+                   failure_type,
+                   priority,
+                   result
+            FROM history
+            WHERE filename LIKE ?
+            ORDER BY id DESC
+            """,
+            (
+                f"%{search_term}%",
+            )
         )
-    )
+
+    else:
+
+        cursor.execute(
+            """
+            SELECT timestamp,
+                   filename,
+                   category,
+                   failure_type,
+                   priority,
+                   result
+            FROM history
+            ORDER BY id DESC
+            """
+        )
 
 else:
 
@@ -258,32 +324,57 @@ else:
         """
         SELECT timestamp,
                filename,
+               category,
+               failure_type,
+               priority,
                result
         FROM history
+        WHERE category = ?
         ORDER BY id DESC
-        """
+        """,
+        (
+            category_filter,
+        )
     )
 
 records = cursor.fetchall()
 
-# -----------------------------
-# Display History
-# -----------------------------
+# ==================================
+# DISPLAY HISTORY
+# ==================================
+
 if records:
 
     for record in records:
 
         timestamp = record[0]
         filename = record[1]
-        result = record[2]
+        category = record[2]
+        failure_type = record[3]
+        priority = record[4]
+        result = record[5]
 
         with st.sidebar.expander(
             filename
         ):
 
             st.write(
-                f"Time: {timestamp}"
+                f"**Category:** {category}"
             )
+
+            st.write(
+                f"**Failure Type:** {failure_type}"
+            )
+
+            st.write(
+                f"**Priority:** {priority}"
+            )
+
+            st.write(
+                f"**Time:** {timestamp}"
+            )
+
+            st.write("---")
 
             st.write(result)
 
