@@ -32,29 +32,39 @@ if uploaded_file:
 
         response = model.generate_content(
             f"""
-            Analyze this serial log.
+You are an expert Linux System Administrator and Post-Silicon Validation Engineer.
 
-            Provide the following sections:
+Analyze the following log file.
 
-            Failure Type:
-            Confidence:
-            Affected Component:
-            Priority:
+Return the response EXACTLY in this format:
 
-            Errors:
-            Root Cause:
-            Debug Actions:
+Failure Type: <value>
+Confidence: <value>
+Affected Component: <value>
+Priority: <value>
 
-            Log:
+Errors:
+- <error 1>
+- <error 2>
 
-            {log_content}
-            """
+Root Cause:
+<root cause explanation>
+
+Debug Actions:
+1. <action 1>
+2. <action 2>
+3. <action 3>
+
+Log:
+
+{log_content}
+"""
         )
 
         result = response.text
 
         # -----------------------------
-        # Failure Summary Card
+        # Extract Summary Fields
         # -----------------------------
         failure_type = "Unknown"
         confidence = "N/A"
@@ -63,18 +73,29 @@ if uploaded_file:
 
         for line in result.splitlines():
 
-            if "Failure Type:" in line:
-                failure_type = line.split(":", 1)[1].strip()
+            if line.startswith("Failure Type:"):
+                failure_type = line.replace(
+                    "Failure Type:", ""
+                ).strip()
 
-            elif "Confidence:" in line:
-                confidence = line.split(":", 1)[1].strip()
+            elif line.startswith("Confidence:"):
+                confidence = line.replace(
+                    "Confidence:", ""
+                ).strip()
 
-            elif "Affected Component:" in line:
-                component = line.split(":", 1)[1].strip()
+            elif line.startswith("Affected Component:"):
+                component = line.replace(
+                    "Affected Component:", ""
+                ).strip()
 
-            elif "Priority:" in line:
-                priority = line.split(":", 1)[1].strip()
+            elif line.startswith("Priority:"):
+                priority = line.replace(
+                    "Priority:", ""
+                ).strip()
 
+        # -----------------------------
+        # Failure Summary Card
+        # -----------------------------
         st.subheader("Failure Summary")
 
         col1, col2 = st.columns(2)
@@ -88,8 +109,13 @@ if uploaded_file:
 
             if priority.lower() == "high":
                 st.error(f"Priority: {priority}")
+
             elif priority.lower() == "medium":
                 st.warning(f"Priority: {priority}")
+
+            elif priority.lower() == "critical":
+                st.error(f"Priority: {priority}")
+
             else:
                 st.success(f"Priority: {priority}")
 
@@ -97,13 +123,16 @@ if uploaded_file:
         # Full Analysis Result
         # -----------------------------
         st.subheader("Analysis Result")
+
         st.write(result)
 
         # -----------------------------
-        # Save History
+        # Save Analysis History
         # -----------------------------
         st.session_state.history.append({
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "time": datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
             "file": uploaded_file.name,
             "result": result
         })
@@ -119,11 +148,19 @@ if st.session_state.history:
         reversed(st.session_state.history),
         start=1
     ):
+
         with st.sidebar.expander(
             f"{i}. {item['file']}"
         ):
-            st.write(f"Time: {item['time']}")
-            st.write(item["result"])
+            st.write(
+                f"Time: {item['time']}"
+            )
+
+            st.write(
+                item["result"]
+            )
 
 else:
-    st.sidebar.write("No history available.")
+    st.sidebar.write(
+        "No history available."
+    )
